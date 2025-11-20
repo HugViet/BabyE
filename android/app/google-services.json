@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "471552951497",
+    "project_id": "babye-7daf2",
+    "storage_bucket": "babye-7daf2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:471552951497:android:762644c7ce473c40a3f918",
+        "android_client_info": {
+          "package_name": "com.babye"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdwTiupeL1Lgp82L2vprV7_diTOpocXs4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
