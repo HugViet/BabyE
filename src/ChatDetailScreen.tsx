@@ -8,11 +8,10 @@ import TcpSocket from 'react-native-tcp-socket';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { launchImageLibrary } from 'react-native-image-picker'; 
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
 import Video from 'react-native-video'; 
 import { Video as VideoCompressor } from 'react-native-compressor';
-import FileViewer from 'react-native-file-viewer';
 import { pick, types } from '@react-native-documents/picker';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 
@@ -94,6 +93,7 @@ function ChatDetailScreen(): React.JSX.Element {
   const [showRecorder, setShowRecorder] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordTime, setRecordTime] = useState('00:00');
+  const [showMediaMenu, setShowMediaMenu] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const serverRef = useRef<any>(null);
@@ -132,7 +132,7 @@ function ChatDetailScreen(): React.JSX.Element {
   }, [targetIpState, loadHistory]);
 
   const handleRename = async () => {
-      if (!newName.trim()) return;
+      if (!newName.trim()) { showAlert('Lỗi', 'Tên trống'); return; }
       try {
           const jsonContacts = await AsyncStorage.getItem(CONTACTS_KEY);
           let contacts = jsonContacts ? JSON.parse(jsonContacts) : [];
@@ -145,7 +145,7 @@ function ChatDetailScreen(): React.JSX.Element {
           await AsyncStorage.setItem(CONTACTS_KEY, JSON.stringify(newContacts));
           setTargetNameState(newName.trim());
           setShowSettings(false); setIsRenaming(false); setNewName('');
-      } catch (e) {}
+      } catch (e) { showAlert('Lỗi', 'Lỗi lưu tên.'); }
   };
   const openDeleteConfirm = () => { setShowSettings(false); setTimeout(() => setShowDeleteConfirm(true), 300); };
   const confirmDelete = async () => { await AsyncStorage.removeItem(CHAT_STORAGE_KEY); setMessages([]); setShowDeleteConfirm(false); };
@@ -164,7 +164,7 @@ function ChatDetailScreen(): React.JSX.Element {
   const saveBase64ToDisk = async (base64: string, type: string): Promise<string> => {
       let ext = 'dat';
       if (type === 'image') ext = 'jpg'; 
-      else if (type === 'video') ext = 'mp4';
+      else if (type === 'video') ext = 'mp4'; 
       else if (type === 'audio') ext = 'mp3';
       const finalName = `${type}_${Date.now()}_sent.${ext}`;
       const path = `${RNFS.DocumentDirectoryPath}/${finalName}`;
@@ -234,37 +234,41 @@ function ChatDetailScreen(): React.JSX.Element {
       } catch (error) { setIsSending(false); showAlert('Lỗi', 'Lỗi ghi âm'); }
   };
 
-  const cancelRecording = async () => {
+  const processMediaResult = async (result: any) => {
+      if (result.didCancel || !result.assets) return;
+      const asset = result.assets[0];
+      let uri = asset.uri; if (!uri) return;
+      const isVideo = asset.type?.includes('video');
+      const typeToSend = isVideo ? 'video' : 'image';
+      setIsSending(true);
       try {
-          await audioRecorderPlayer.stopRecorder();
-          audioRecorderPlayer.removeRecordBackListener();
-          setIsRecording(false);
-          setRecordTime('00:00');
-          setShowRecorder(false);
-      } catch (e) {}
+          if (isVideo) {
+              setIsCompressing(true);
+              const compressedUri = await VideoCompressor.compress(uri, { compressionMethod: 'auto', maxWidth: 480, quality: 0.6 });
+              uri = compressedUri; setIsCompressing(false);
+          }
+          const cleanUri = uri.startsWith('file://') ? uri.replace('file://', '') : uri;
+          const base64Data = await RNFS.readFile(cleanUri, 'base64');
+          if (base64Data.length > 15 * 1024 * 1024) { showAlert('To quá!', 'Nặng quá.'); setIsSending(false); return; }
+          const savedPath = await saveBase64ToDisk(base64Data, typeToSend);
+          sendPayload(base64Data, typeToSend, savedPath);
+      } catch (error) { setIsCompressing(false); setIsSending(false); showAlert('Lỗi', 'Lỗi file.'); }
   };
 
-  const pickMediaAndSend = async () => {
-    if (isSending || isCompressing) return;
-    const result = await launchImageLibrary({ mediaType: 'mixed', quality: 0.7, includeBase64: false });
-    if (result.didCancel || !result.assets) return;
-    const asset = result.assets[0];
-    let uri = asset.uri; if (!uri) return;
-    const isVideo = asset.type?.includes('video');
-    const typeToSend = isVideo ? 'video' : 'image';
-    setIsSending(true);
-    try {
-        if (isVideo) {
-            setIsCompressing(true);
-            const compressedUri = await VideoCompressor.compress(uri, { compressionMethod: 'auto', maxWidth: 480, quality: 0.6 });
-            uri = compressedUri; setIsCompressing(false);
-        }
-        const cleanUri = uri.startsWith('file://') ? uri.replace('file://', '') : uri;
-        const base64Data = await RNFS.readFile(cleanUri, 'base64');
-        if (base64Data.length > 15 * 1024 * 1024) { showAlert('To quá!', 'Nặng quá.'); setIsSending(false); return; }
-        const savedPath = await saveBase64ToDisk(base64Data, typeToSend);
-        sendPayload(base64Data, typeToSend, savedPath);
-    } catch (error) { setIsCompressing(false); setIsSending(false); showAlert('Lỗi', 'Lỗi file.'); }
+  const onPickLibrary = async () => {
+      setShowMediaMenu(false);
+      const result = await launchImageLibrary({ mediaType: 'mixed', quality: 0.7, includeBase64: false });
+      processMediaResult(result);
+  };
+
+  const onOpenCamera = async () => {
+      setShowMediaMenu(false);
+      if (Platform.OS === 'android') {
+          const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) { showAlert('Lỗi', 'Cần quyền Camera'); return; }
+      }
+      const result = await launchCamera({ mediaType: 'mixed', quality: 0.7, includeBase64: false, saveToPhotos: true });
+      processMediaResult(result);
   };
 
   const sendMessage = () => {
@@ -357,6 +361,23 @@ function ChatDetailScreen(): React.JSX.Element {
             </View>
           </Modal>
 
+          <Modal animationType="fade" transparent={true} visible={showMediaMenu} onRequestClose={() => setShowMediaMenu(false)}>
+            <View style={styles.compressOverlay}>
+                <View style={styles.settingsBox}>
+                    <Text style={styles.settingsTitle}>Gửi ảnh/video</Text>
+                    <TouchableOpacity style={styles.menuItem} onPress={onPickLibrary}>
+                        <Ionicons name="images-outline" size={24} color="#0084ff" />
+                        <Text style={styles.menuText}>Chọn từ thư viện</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.menuItem, {borderBottomWidth: 0}]} onPress={onOpenCamera}>
+                        <Ionicons name="camera-outline" size={24} color="#ff4d4f" />
+                        <Text style={styles.menuText}>Chụp/Quay mới</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.cancelBtn, {marginTop: 20}]} onPress={() => setShowMediaMenu(false)}><Text style={styles.cancelText}>Đóng</Text></TouchableOpacity>
+                </View>
+            </View>
+          </Modal>
+
           <Modal animationType="fade" transparent={true} visible={showRecorder} onRequestClose={() => { if (!isRecording) setShowRecorder(false); }}>
             <View style={styles.compressOverlay}>
                 <View style={[styles.settingsBox, {alignItems: 'center'}]}>
@@ -370,7 +391,17 @@ function ChatDetailScreen(): React.JSX.Element {
                             </>
                         ) : (
                             <View style={{flexDirection: 'row', width: '100%', justifyContent: 'space-between'}}>
-                                <TouchableOpacity style={[styles.btn, {backgroundColor: '#ccc', flex: 0.48}]} onPress={cancelRecording}><Text>Hủy</Text></TouchableOpacity>
+                                {/* Nút Hủy khi đang ghi âm */}
+                                <TouchableOpacity style={[styles.btn, {backgroundColor: '#ccc', flex: 0.48}]} onPress={async () => {
+                                    try {
+                                        await audioRecorderPlayer.stopRecorder();
+                                        audioRecorderPlayer.removeRecordBackListener();
+                                        setIsRecording(false);
+                                        setRecordTime('00:00');
+                                        setShowRecorder(false);
+                                    } catch(e){}
+                                }}><Text>Hủy</Text></TouchableOpacity>
+                                
                                 <TouchableOpacity style={[styles.btn, {backgroundColor: '#0084ff', flex: 0.48}]} onPress={stopRecordingAndSend}><Text style={{color: '#fff', fontWeight: 'bold'}}>Gửi</Text></TouchableOpacity>
                             </View>
                         )}
@@ -387,7 +418,7 @@ function ChatDetailScreen(): React.JSX.Element {
             <TouchableOpacity style={styles.mediaBtn} onPress={() => setShowAudioMenu(true)} disabled={isSending}>
                 <Ionicons name="mic-outline" size={28} color="#0084ff" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mediaBtn} onPress={pickMediaAndSend} disabled={isSending}>
+            <TouchableOpacity style={styles.mediaBtn} onPress={() => setShowMediaMenu(true)} disabled={isSending}>
                 <Ionicons name="images-outline" size={28} color="#0084ff" />
             </TouchableOpacity>
             <TextInput style={[styles.chatInput, { marginRight: 0, flex: 1 }]} placeholder="Nhắn tin..." placeholderTextColor="#888" value={message} onChangeText={setMessage} editable={!isSending}/>
