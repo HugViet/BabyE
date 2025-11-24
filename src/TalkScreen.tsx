@@ -47,11 +47,14 @@ function TalkScreen(): React.JSX.Element {
   };
 
   const addContact = async () => {
-    if (!inputName.trim() || !inputIp.trim()) {
-      Alert.alert('Thiếu thông tin', 'Nhập cả tên và IP đi bố!');
+    if (!inputIp.trim()) {
+      Alert.alert('Thiếu thông tin', 'IP không được để trống.');
       return;
     }
-    const newContact = { id: Date.now().toString(), name: inputName, ip: inputIp };
+
+    const finalName = inputName.trim() ? inputName.trim() : inputIp.trim();
+
+    const newContact = { id: Date.now().toString(), name: finalName, ip: inputIp.trim() };
     const newList = [...contacts, newContact];
     
     setContacts(newList);
@@ -93,15 +96,11 @@ function TalkScreen(): React.JSX.Element {
   return (
     <ImageBackground source={require('../image/talk/background_talk.jpg')} style={{ flex: 1 }} resizeMode="cover">
       <SafeAreaView style={styles.root}>
-        
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Danh bạ Chat</Text>
-          <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.iconBtn}>
-            <Ionicons name="add" size={28} color="#fff" />
-          </TouchableOpacity>
+            <Text style={styles.headerTitle}>Danh bạ</Text>
+            <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.iconBtn}>
+                <Ionicons name="add" size={28} color="#fff" />
+            </TouchableOpacity>
         </View>
 
         <FlatList
@@ -110,12 +109,10 @@ function TalkScreen(): React.JSX.Element {
             contentContainerStyle={{ padding: 20 }}
             renderItem={({ item }) => (
                 <TouchableOpacity style={styles.card} onPress={() => goToChat(item)}>
-                    
                     <View style={{ flex: 1, marginLeft: 5 }}>
                         <Text style={styles.cardName}>{item.name}</Text>
                         <Text style={styles.cardIp}>IP: {item.ip}</Text>
                     </View>
-                    
                     <TouchableOpacity onPress={() => promptDelete(item.id)} style={styles.deleteBtn}>
                         <Ionicons name="trash-outline" size={22} color="#ff4d4f" />
                     </TouchableOpacity>
@@ -140,7 +137,7 @@ function TalkScreen(): React.JSX.Element {
               <TextInput style={styles.input} value={inputIp} onChangeText={setInputIp} keyboardType="numeric" placeholder="192.168..." />
 
               <Text style={styles.label}>Tên gợi nhớ:</Text>
-              <TextInput style={styles.input} value={inputName} onChangeText={setInputName} />
+              <TextInput style={styles.input} value={inputName} onChangeText={setInputName} placeholder="VD: Bạn hiền" />
 
               <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, {backgroundColor: '#ccc'}]} onPress={() => setModalVisible(false)}>
@@ -168,7 +165,7 @@ function TalkScreen(): React.JSX.Element {
                             <Text style={{fontWeight: '600'}}>Hủy</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.btn, {backgroundColor: '#ff4d4f'}]} onPress={confirmDelete}>
-                            <Text style={{color: '#fff', fontWeight: 'bold'}}>Xác nhận</Text>
+                            <Text style={{color: '#fff', fontWeight: 'bold'}}>Xóa luôn</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -183,10 +180,10 @@ function TalkScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   root: { flex: 1, paddingTop: Platform.OS === 'android' ? 40 : 0 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, marginBottom: 10 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#df66c9ff' },
-  iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(190, 43, 43, 0.3)', justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
+  iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
   
-  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(241, 213, 237, 0.94)', padding: 15, borderRadius: 18, marginBottom: 12 },
+  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.9)', padding: 15, borderRadius: 18, marginBottom: 12 },
   cardName: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   cardIp: { fontSize: 14, color: '#666', marginTop: 2 },
   deleteBtn: { padding: 10 },
